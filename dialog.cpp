@@ -27,6 +27,7 @@ Dialog::Dialog(QWidget *parent) :
 {
     ui->setupUi(this);
     this->setWindowFlags(Qt::Window | Qt::CustomizeWindowHint);
+    debug=FALSE;
     QString settingsFile = (QDir::currentPath()+ "/settings.ini");
     QSettings *settings =new QSettings(settingsFile,QSettings::IniFormat);
     QString host=settings->value("host").toString();
@@ -154,7 +155,7 @@ void Dialog::startRead()
         QTcpSocket *client=qobject_cast<QTcpSocket *>(sender());
         QDataStream *in=new QDataStream (client);
         in->setVersion(QDataStream::Qt_4_1);
-
+        QString querystr;
 
         qDebug()<<"2.BYETS1:"<<client->bytesAvailable();
         //QDataStream in(client);
@@ -274,9 +275,11 @@ void Dialog::startRead()
             QString customer;
             *in >> customer;
             QSqlQuery query(db1);
-            QDateTime ftrdate=QDateTime::currentDateTime();
 
-            query.exec("SELECT CCODE,CUSTOMER,CAR1,CAR2,WEIGHT,ID FROM PROFORTOSI_HEADER WHERE ISCLOSED=1 AND CCODE='"+customer+"'");
+            querystr="SELECT CCODE,CUSTOMER,CAR1,CAR2,WEIGHT,ID FROM PROFORTOSI_HEADER WHERE ISCLOSED=1 AND CCODE='"+customer+"'";
+            query.exec(querystr);
+            if (debug)
+                appendlog("PRFC",querystr);
             while (query.next())
             {
                     QByteArray block;
@@ -362,20 +365,38 @@ void Dialog::startRead()
 
                 if (m_sign==0)
                         {
-                        query.exec("INSERT INTO fortosi_header (ftrdate,customer,car1,car2,isclosed,iskef,weight,pfid,ccode) values ('"
-                                        +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',1,0,"+weight+","+pfid+",'"+ccode+"')");
-                        query.exec("UPDATE profortosi_header set istransformed=1 where id="+pfid);
-                        query.exec("SELECT max(id) from fortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
-                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'");
+                        querystr="INSERT INTO fortosi_header (ftrdate,customer,car1,car2,isclosed,iskef,weight,pfid,ccode) values ('"
+                                   +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',1,0,"+weight+","+pfid+",'"+ccode+"')";
+                        query.exec(querystr);
+                        if(debug)
+                            appendlog("FP",querystr);
+                        querystr="UPDATE profortosi_header set istransformed=1 where id="+pfid;
+                        query.exec(querystr);
+                        if(debug)
+                            appendlog("FP",querystr);
+                        querystr="SELECT max(id) from fortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
+                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'";
+                        query.exec(querystr);
+                        if(debug)
+                            appendlog("FP",querystr);
+
                         query.last();
 
                         ftrid=query.value(0).toString();
 
                         m_sign=1;
                         }
-                query.exec("INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")");
+                querystr="INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("FP",querystr);
+
                 QSqlQuery query1(db2);
-                query1.exec("UPDATE SERIAL SET IS_FTIED=1 where SNSERIALC='"+code_t+"'");
+                querystr="UPDATE SERIAL SET IS_FTIED=1 where SNSERIALC='"+code_t+"'";
+                query1.exec("querystr");
+                if(debug)
+                    appendlog("FP",querystr);
+
         }
 
         if (req_type=="COMP")
@@ -385,8 +406,11 @@ void Dialog::startRead()
             *in >> code_t >> prfid;
 
             QSqlQuery query(db1);
+            querystr="INSERT INTO tmp_compare (prfid,code_t) values("+prfid+",'"+code_t+"')";
+            query.exec(querystr);
+            if(debug)
+                appendlog("COMP",querystr);
 
-            query.exec("INSERT INTO tmp_compare (prfid,code_t) values("+prfid+",'"+code_t+"')");
             compare_mode=1;
         }
 
@@ -397,9 +421,15 @@ void Dialog::startRead()
             *in >> prfid;
 
             QSqlQuery query(db1);
+            querystr="DELETE FROM profortosi_details WHERE ftrid="+prfid;
+            query.exec(querystr);
+            if(debug)
+                appendlog("DELPRF",querystr);
+            querystr="DELETE FROM profortosi_header WHERE id="+prfid;
+            query.exec(querystr);
+            if(debug)
+                appendlog("DELPRF",querystr);
 
-            query.exec("DELETE FROM profortosi_details WHERE ftrid="+prfid);
-            query.exec("DELETE FROM profortosi_header WHERE id="+prfid);
 
         }
 
@@ -410,9 +440,15 @@ void Dialog::startRead()
             *in >> prfid;
 
             QSqlQuery query(db1);
+            querystr="DELETE FROM fortosi_details WHERE ftrid="+prfid;
+            query.exec(querystr);
+            if(debug)
+                appendlog("DELF",querystr);
+            querystr="DELETE FROM fortosi_header WHERE id="+prfid;
+            query.exec(querystr);
+            if(debug)
+                appendlog("DELF",querystr);
 
-            query.exec("DELETE FROM fortosi_details WHERE ftrid="+prfid);
-            query.exec("DELETE FROM fortosi_header WHERE id="+prfid);
 
         }
 
@@ -423,65 +459,22 @@ void Dialog::startRead()
             QString code_t;
             *in >> code_t;
             QSqlQuery query(db2);
-            query.exec("SELECT * from serial where snserialc='"+code_t+"'" );
+            querystr="SELECT * from serial where snserialc='"+code_t+"'" ;
+            query.exec(querystr);
+            if(debug)
+                appendlog("CHKC",querystr);
+
             if (!query.next())
-            {
-                qDebug()<<"9.DEN YPARXEIS";
+                 checkmap.insert(code_t,"0");
 
-                //QByteArray block;
-                //QString type="CHKC";
-                //QDataStream out(&block,QIODevice::WriteOnly);
-                //QVariant test=pc;
-                checkmap.insert(code_t,"0");
-                //out.setVersion(QDataStream::Qt_4_1);
-                //out<<quint16(0)<<(QString)type<<(QString)code_t<<(QString)"0"<<(QString)test.toString();
-                //qDebug()<<code_t<<pc;
-                //out.device()->seek(0);
-                //out<<quint16(block.size()-sizeof(quint16));
-                //qDebug()<<"blocksize:"<<quint16(block.size()-sizeof(quint16));
-                //client->write(block);
-                //if (pc==20)
-                //{
-                 //client->reset();
-                 //pc=0;
-                 //QByteArray block1;
 
-                 //QDataStream out1(&block1,QIODevice::WriteOnly);
-                 //out1.setVersion(QDataStream::Qt_4_1);
-                 //out1<<quint16(0xFFFF);
-                 //client->write(block1);
-             //}
+            querystr="SELECT * from serial where snserialc='"+code_t+"' and ((is_ptied=1) or (is_ftied=1) or (snDate3 is not null)) " ;
+            query.exec(querystr);
+            if(debug)
+                appendlog("CHKC",querystr);
 
-            }
-            query.exec("SELECT * from serial where snserialc='"+code_t+"' and ((is_ptied=1) or (is_ftied=1) or (snDate3 is not null)) " );
             if (query.next())
-            {
-                qDebug()<<"10.YPARXEIS ALLA...";
-
-                //QByteArray block;
-                //QString type="CHKC";
-                //QDataStream out(&block,QIODevice::WriteOnly);
-                //out.setVersion(QDataStream::Qt_4_1);
-                //out<<quint16(0)<<(QString)type<<(QString)code_t<<(QString)"1";
-                //out.device()->seek(0);
-                //out<<quint16(block.size()-sizeof(quint16));
-                //client->write(block);
-                //QByteArray block1;
-
-                //QDataStream out1(&block1,QIODevice::WriteOnly);
-                //out1.setVersion(QDataStream::Qt_4_1);
-                //out1<<quint16(0xFFFF);
-                //client->write(block1);
-                checkmap.insert(code_t,"1");
-            }
-
-            //QByteArray block1;
-
-            //QDataStream out1(&block1,QIODevice::WriteOnly);
-            //out1.setVersion(QDataStream::Qt_4_1);
-            //out1<<quint16(0xFFFF);
-            //client->write(block1);
-
+                 checkmap.insert(code_t,"1");
 
         }
 
@@ -496,19 +489,34 @@ void Dialog::startRead()
 
                 if (m_sign==0)
                         {
-                        query.exec("INSERT INTO profortosi_header (ftrdate,customer,car1,car2,isclosed,weight,ccode) values ('"
-                                        +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',1,"+weight+",'"+ccode+"')");
-                        query.exec("SELECT max(id) from profortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
-                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'");
+                        querystr="INSERT INTO profortosi_header (ftrdate,customer,car1,car2,isclosed,weight,ccode) values ('"
+                                        +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',1,"+weight+",'"+ccode+"')";
+                        query.exec(querystr);
+                        if(debug)
+                            appendlog("PFP",querystr);
+                        querystr="SELECT max(id) from profortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
+                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'";
+                        query.exec(querystr);
+                        if(debug)
+                            appendlog("PFP",querystr);
+
                         query.last();
 
                         ftrid=query.value(0).toString();
                         m_sign=1;
 
                         }
-                query.exec("INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")");
+                querystr="INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("PFP",querystr);
+
                 QSqlQuery query1(db2);
-                query1.exec("UPDATE SERIAL SET IS_PTIED=1 where SNSERIALC='"+code_t+"'");
+                querystr="UPDATE SERIAL SET IS_PTIED=1 where SNSERIALC='"+code_t+"'";
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("PFP",querystr);
+
 
         }
 
@@ -526,32 +534,22 @@ void Dialog::startRead()
 
                 bool res;
                 if(i==0 )
-                res=query.exec("INSERT INTO apografi (code_t,scanner,adate,code_a,comments) values ('"+code_t+"',1,'"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')");
-                else
-                    res=query.exec("INSERT INTO apografi_duplicate (code_t,scanner,adate,code_a,comments) values ('"+code_t+"',1,'"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')");
-                /*
-                if (res==TRUE)
                 {
+                    querystr="INSERT INTO apografi (code_t,scanner,adate,code_a,comments) values ('"+code_t+"',1,'"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')";
+                    res=query.exec(querystr);
+                    if(debug)
+                        appendlog("APIN",querystr);
 
-
-                    QByteArray block;
-                    QString type="APIN";
-                    QDataStream out(&block,QIODevice::WriteOnly);
-                    out.setVersion(QDataStream::Qt_4_1);
-                    out<<quint16(0)<<(QString)type<<(QString)code_t;
-                    out.device()->seek(0);
-                    out<<quint16(block.size()-sizeof(quint16));
-                    client->write(block);
-                    QByteArray block1;
-
-                    QDataStream out1(&block1,QIODevice::WriteOnly);
-                    out1.setVersion(QDataStream::Qt_4_1);
-                    out1<<quint16(0xFFFF);
-                    client->write(block1);
+                }
+                else
+                {
+                    querystr="INSERT INTO apografi_duplicate (code_t,scanner,adate,code_a,comments) values ('"+code_t+"',1,'"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("APIN",querystr);
 
                 }
 
-*/
 
         }
 
@@ -581,10 +579,21 @@ void Dialog::startRead()
 
                 bool res;
                 if(i==0 )
-                    res=query.exec("INSERT INTO apografi (code_t,adate,code_a,comments) values ('"+code_t+"','"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')");
-                else
-                    res=query.exec("INSERT INTO apografi_duplicate (code_t,adate,code_a,comments) values ('"+code_t+"','"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')");
+                {
+                    querystr="INSERT INTO apografi (code_t,adate,code_a,comments) values ('"+code_t+"','"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')";
+                    res=query.exec(querystr);
+                    if(debug)
+                        appendlog("APIN_NEW",querystr);
 
+                }
+                else
+                {
+                    querystr="INSERT INTO apografi_duplicate (code_t,adate,code_a,comments) values ('"+code_t+"','"+adate.toString("MM-dd-yyyy HH:mm:ss")+"','"+code_a+"','"+comments+"')";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("APIN_NEW",querystr);
+
+                }
                 line=in.readLine();
             }
             QString test=hfsserver+"apografi_"+adate.toString("MMddyyyyHHmmss")+".txt";
@@ -605,8 +614,12 @@ void Dialog::startRead()
 
                 QSqlQuery query(db2);
                 QSqlQuery query1(db1);
-                QDateTime adate=QDateTime::currentDateTime();
-                query.exec("select max(stfileid) from strn");
+                querystr="select max(stfileid) from strn";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+
+
                 QString stmaxid;
                 query.next();
                 QVariant id=query.value(0).toInt()+1;
@@ -616,32 +629,68 @@ void Dialog::startRead()
 
                 bool res;
                 QString sFileid;
-                query.exec("select sfileid from smast where scode='"+code_a+"'");
+                querystr="select sfileid from smast where scode='"+code_a+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+
                 query.next();
                 sFileid=query.value(0).toString();
-                //query.exec("select max(snfileid) from serial");
-                //query.next();
-                //QVariant id1=query.value(0).toInt()+1;
-                //QString snmaxid=id1.toString();
 
 
 
 
                 QDateTime pr_date=QDateTime::currentDateTime();
 
+                querystr="INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,stcomment,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",47,'KAT',1,"+weight+",'"+serial+"',cast (current_time as timestamp))";
+                res=query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNDATE2=CURRENT_DATE where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNINVOICE2='KAT/FI' where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNTRKIND2=47 where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNSPACE2=1 where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNPERSCODE2='00.0000' where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNDATE3=CURRENT_DATE where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNINVOICE3='KAT/FI' where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNTRKIND3=47 where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNSPACE3=1 where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="UPDATE SERIAL SET SNPERSCODE3='00.0000' where snserialc='"+serial+"' and sfileid="+sFileid;
+                query.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
+                querystr="INSERT INTO analyser (code_t,adate,code_a) values ('"+code_t+"','"+pr_date.toString("MM-dd-yyyy")+"','"+code_a+"')";
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("AKAT",querystr);
 
-                res=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,stcomment,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",47,'KAT',1,"+weight+",'"+serial+"',cast (current_time as timestamp))");
-                query.exec("UPDATE SERIAL SET SNDATE2=CURRENT_DATE where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNINVOICE2='KAT/FI' where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNTRKIND2=47 where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNSPACE2=1 where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNPERSCODE2='00.0000' where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNDATE3=CURRENT_DATE where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNINVOICE3='KAT/FI' where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNTRKIND3=47 where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNSPACE3=1 where snserialc='"+serial+"' and sfileid="+sFileid);
-                query.exec("UPDATE SERIAL SET SNPERSCODE3='00.0000' where snserialc='"+serial+"' and sfileid="+sFileid);
-                query1.exec("INSERT INTO analyser (code_t,adate,code_a) values ('"+code_t+"','"+pr_date.toString("MM-dd-yyyy")+"','"+code_a+"')");
 
 
 
@@ -677,8 +726,11 @@ void Dialog::startRead()
                 *in >> code_t >> code_a;
 
                 QSqlQuery query(db2);
+                querystr="select max(stfileid) from strn";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
 
-                query.exec("select max(stfileid) from strn");
                 QString stmaxid;
                 query.next();
                 QVariant id=query.value(0).toInt()+1;
@@ -688,37 +740,80 @@ void Dialog::startRead()
 
                 bool res;
                 QString sFileid;
-                query.exec("select sfileid from smast where scode='"+code_a+"'");
+                querystr="select sfileid from smast where scode='"+code_a+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+
                 query.next();
                 sFileid=query.value(0).toString();
-                //query.exec("select max(snfileid) from serial");
-                //query.next();
-                //QVariant id1=query.value(0).toInt()+1;
-                //QString snmaxid=id1.toString();
-
-
-
-
-                QDateTime pr_date=QDateTime::currentDateTime();
 
 
                 //res=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,stcomment,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",47,'KAT',1,"+weight+",'"+serial+"',cast (current_time as timestamp))");
-                query.exec("UPDATE SERIAL SET SNDATE1=CURRENT_DATE where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNINVOICE1='EPISTROFI' where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNTRKIND1=84 where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNSPACE1=1 where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNPERSCODE1='00.0000' where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNDATE3=CURRENT_DATE where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNINVOICE3='EPISTROFI' where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNTRKIND3=7 where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNSPACE3=1 where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNPERSCODE2=NULL where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNDATE2=NULL where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNINVOICE2=NULL where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNTRKIND2=NULL where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNSPACE2=NULL where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNPERSCODE2=NULL where snserialc='"+serial+"'");
-                query.exec("UPDATE SERIAL SET SNPERSNAME2=NULL where snserialc='"+serial+"'");
+                querystr="UPDATE SERIAL SET SNDATE1=CURRENT_DATE where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNINVOICE1='EPISTROFI' where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNTRKIND1=84 where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNSPACE1=1 where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNPERSCODE1='00.0000' where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNDATE3=CURRENT_DATE where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNINVOICE3='EPISTROFI' where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNTRKIND3=7 where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNSPACE3=1 where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNPERSCODE2=NULL where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNDATE2=NULL where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNINVOICE2=NULL where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNTRKIND2=NULL where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNSPACE2=NULL where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNPERSCODE2=NULL where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
+                querystr="UPDATE SERIAL SET SNPERSNAME2=NULL where snserialc='"+serial+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("RETURN_ROLL",querystr);
 
 
 
@@ -768,7 +863,11 @@ void Dialog::startRead()
                 *in >> f_code;
 
                 QSqlQuery query(db1);
-                query.exec("select * from smast where scode='"+f_code+"')");
+                querystr="select * from smast where scode='"+f_code+"')";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFCHECK",querystr);
+
                 QString reply;
                 if (!query.next())
                     reply="0";
@@ -802,22 +901,30 @@ void Dialog::startRead()
                 *in >> code_t >> code >> pid >> vardia;
 
                 QSqlQuery query(db2);
-                query.exec("select * from strn where stcomment='"+code_t+"' and STTRANSKIND=83");
+                querystr="select * from strn where stcomment='"+code_t+"' and STTRANSKIND=83";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFINSERT",querystr);
                 QString reply;
                 if (query.next())
                     return;
 
 
+                querystr="select max(stfileid) from strn";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFINSERT",querystr);
 
-                query.exec("select max(stfileid) from strn");
                 QString stmaxid;
                 query.next();
                 QVariant id=query.value(0).toInt()+1;
                 stmaxid=id.toString();
 
 
-
-                query.exec("select max(snfileid) from serial");
+                querystr="select max(snfileid) from serial";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFINSERT",querystr);
 
                 query.next();
                 QVariant id1=query.value(0).toInt()+1;
@@ -827,7 +934,10 @@ void Dialog::startRead()
                 QString weight= serial.left(3);
                 QString sFileid;
                 QString quality=serial.mid(12,1);
-                query.exec("select sfileid from smast where scode='"+code+"'");
+                querystr="select sfileid from smast where scode='"+code+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFINSERT",querystr);
                 query.next();
                 sFileid=query.value(0).toString();
                 QDateTime pr_date=QDateTime::currentDateTime();
@@ -840,22 +950,25 @@ void Dialog::startRead()
                 {
 
 
-                    //st=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT) VALUES ("+stmaxid+",'"+pr_date.toString("yyyy-MM-dd")+"',"+sFileid+",66,'PARAGOGI',1,"+weight+",'"+serial+"')");
-                    //sn=query.exec("INSERT INTO SERIAL(snfileidD,Sfileid,snscode,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"','"+pr_date.toString("yyyy-MM-dd")+"','PARAGOGI',66,1)");
+
+                    querystr=st1;
                     res1=query.exec(st1);
+                    if(debug)
+                        appendlog("KFINSERT",querystr);
+                    querystr=st2;
                     res2=query.exec(st2);
+                    if(debug)
+                        appendlog("KFINSERT",querystr);
 
                 }
 
                 if ((quality!="K") and (code.left(1)=="E"))
                 {
 
-
-                    //st=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT) VALUES ("+stmaxid+",'"+pr_date.toString("yyyy-MM-dd")+"',"+sFileid+",66,'PARAGOGI',1,"+weight+",'"+serial+"')");
-                    //sn=query.exec("INSERT INTO SERIAL(snfileidD,Sfileid,snscode,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"','"+pr_date.toString("yyyy-MM-dd")+"','PARAGOGI',66,1)");
-                    //res1=query.exec(st1);
-                    qDebug()<<st2;
+                    querystr=st2;
                     res2=query.exec(st2);
+                    if(debug)
+                        appendlog("KFINSERT",querystr);
 
                 }
 
@@ -864,14 +977,27 @@ void Dialog::startRead()
                 if (res1==TRUE && res2==TRUE)
                 {
                     QSqlQuery query1(db1);
-                    query1.exec("UPDATE PRODUCTION SET ISKEF=1 WHERE ID="+pid);
+                    querystr="UPDATE PRODUCTION SET ISKEF=1 WHERE ID="+pid;
+                    query1.exec(querystr);
+                    if(debug)
+                        appendlog("KFINSERT",querystr);
                 }
                 else
                 {
                     if (res1==FALSE)
-                        query.exec("INSERT INTO production_failed (statement) values ('"+st1+"')");
+                    {
+                        querystr="INSERT INTO production_failed (statement) values ('"+st1+"')";
+                        query.exec(querystr);
+                        if(debug)
+                            appendlog("KFINSERT",querystr);
+                    }
                     if (res2==FALSE)
-                        query.exec("INSERT INTO production_failed (statement) values ('"+st2+"')");
+                    {
+                        querystr="INSERT INTO production_failed (statement) values ('"+st2+"')";
+                        query.exec(querystr);
+                        if(debug)
+                            appendlog("KFINSERT",querystr);
+                    }
 
                 }
 
@@ -888,10 +1014,16 @@ void Dialog::startRead()
                 *in >> old_code >> code_t >> old_acode >> new_acode >> pid >> vardia >> new_aa;
                 qDebug()<<"OLDCODE:"<<old_code<<"CODE_T"<<code_t<<"CODE:"<<old_acode<<"PID:"<<pid<<"VARDIA"<<vardia<<"NEW_AA"<<new_aa;
                 QSqlQuery query(db2),query2(db1);
-                query2.exec("insert into rewrap (old_code,new_code,r_date,old_acode,new_acode) values ('"\
-                            +old_code+"','"+code_t+"',getdate(),'"+old_acode+"','"+new_acode+"')");
+                querystr="insert into rewrap (old_code,new_code,r_date,old_acode,new_acode) values ('"\
+                            +old_code+"','"+code_t+"',getdate(),'"+old_acode+"','"+new_acode+"')";
+                query2.exec(querystr);
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
+                querystr="select * from strn where stcomment='"+code_t+"' and STTRANSKIND=83";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
 
-                query.exec("select * from strn where stcomment='"+code_t+"' and STTRANSKIND=83");
                 QString reply;
                 if (query.next())
                 {
@@ -901,8 +1033,11 @@ void Dialog::startRead()
                 }
 
 
+                querystr="select max(stfileid) from strn";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
 
-                query.exec("select max(stfileid) from strn");
                 QString stmaxid,stmaxid1;
                 query.next();
 
@@ -911,8 +1046,10 @@ void Dialog::startRead()
                 stmaxid=id.toString();
                 stmaxid1=id2.toString();
 
-
-                query.exec("select max(snfileid) from serial");
+                querystr="select max(snfileid) from serial";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
 
                 query.next();
                 QVariant id1=query.value(0).toInt()+1;
@@ -923,42 +1060,51 @@ void Dialog::startRead()
                 QString weight= serial.left(3);
                 QString sFileid;
                 QString quality=serial.mid(12,1);
-                query.exec("select sfileid from smast where scode='"+new_acode+"'");
+                querystr="select sfileid from smast where scode='"+new_acode+"'";
+                query.exec("querystr");
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
                 query.next();
                 sFileid=query.value(0).toString();
-                QDateTime pr_date=QDateTime::currentDateTime();
-
-                qDebug()<<"sFileid"<<sFileid<<stmaxid<<snmaxid;
 
                 if (quality!="K")
                 {
 
 
-                    //st=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT) VALUES ("+stmaxid+",'"+pr_date.toString("yyyy-MM-dd")+"',"+sFileid+",66,'PARAGOGI',1,"+weight+",'"+serial+"')");
-                    //sn=query.exec("INSERT INTO SERIAL(snfileidD,Sfileid,snscode,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"','"+pr_date.toString("yyyy-MM-dd")+"','PARAGOGI',66,1)");
                     QString querystr="INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT,stcomment2,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",83,'ANATYLIXI',1,"+weight+",'"+serial+"','"+vardia+"',cast (current_time as timestamp))";
                     query.exec(querystr);
-                    qDebug()<<querystr;
+                    if(debug)
+                        appendlog("KFREWRAP",querystr);
+
                     querystr="INSERT INTO SERIAL(snfileid,Sfileid,snserialc,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"',CURRENT_DATE,'ANATYLIXI',83,1)";
                     query.exec(querystr);
+                    if(debug)
+                        appendlog("KFREWRAP",querystr);
 
 
                 }
                 QSqlQuery query1(db1);
-                query1.exec("UPDATE PRODUCTION SET ISKEF=1 WHERE ID="+pid);
+                querystr="UPDATE PRODUCTION SET ISKEF=1 WHERE ID="+pid;
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
                 if (new_aa=="1")
                 {
                     QString querystr="SELECT sfileid from smast where scode='"+old_acode+"'";
-                    qDebug()<<querystr;
                     query.exec(querystr);
+                    if(debug)
+                        appendlog("KFREWRAP",querystr);
                     query.next();
                     sFileid=query.value(0).toString();
 
                 querystr="INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT,stcomment2,sttime) VALUES ("+stmaxid1+",CURRENT_DATE,"+sFileid+",88,'ANATYLIXI',1,"+weight_old+",'"+serial_old+"','"+vardia+"',cast (current_time as timestamp))";
-                qDebug()<<querystr;
                 query.exec(querystr);
-                //query.exec("DELETE from strn where sttranskind=83 and stcomment='"+old_code+"'");
-                query.exec("DELETE from serial where snserialc='"+old_code+"'");
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
+                querystr="DELETE from serial where snserialc='"+old_code+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFREWRAP",querystr);
             }
 
 
@@ -974,9 +1120,11 @@ void Dialog::startRead()
                 qDebug()<<old_code<<code_1<<code_2<<code_3<<code_4<<code_5;
 
                 QSqlQuery query(db1);
-                query.exec(
-                        "select top 1 id,pr_date,vardia,f_code,middle,middle_2,middle_3 from production where code_t='"
-                                    + old_code + "'");
+                querystr="select top 1 id,pr_date,vardia,f_code,middle,middle_2,middle_3 from production where code_t='"
+                                    + old_code + "'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("PRREWRAP",querystr);
                 query.next();
                 QString id = query.value(0).toString();
                 QString pr_date = query.value(1).toString();
@@ -987,23 +1135,31 @@ void Dialog::startRead()
                 QString middle_3 = query.value(6).toString();
                 QString pid1,pid2,pid3,pid4,pid5;
 
-
-                query.exec("DELETE from production where code_t='"+old_code+"'");
+                querystr="DELETE from production where code_t='"+old_code+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("PRREWRAP",querystr);
                 QString code_t = code_1;
                 if (code_t != "")
                 {
                     QString weight = code_t.left(3);
                     QString qual = code_t.mid(12, 1);
                     QString aa = code_t.mid(11, 1);
-                    query.exec(
-                                    "INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
+                    querystr="INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
                                             + weight + ",'" + qual + "','" + middle + "'," + aa
                                             + ",'" + pr_date + "','" + f_code + "',0,'"
                                             + code_t + "','" + middle_2 + "','" + middle_3
-                                            + "','" + vardia + "')");
-                            query.exec("select top 1 id from production where code_t='"+ code_t + "'");
-                            query.next();
-                            pid1 = query.value(0).toString();
+                                            + "','" + vardia + "')";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    querystr="select top 1 id from production where code_t='"+ code_t + "'";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+
+                    query.next();
+                    pid1 = query.value(0).toString();
 
                     }
                 if(code_2!="")
@@ -1012,15 +1168,20 @@ void Dialog::startRead()
                     QString weight = code_t.left(3);
                     QString qual = code_t.mid(12, 1);
                     QString aa = code_t.mid(11, 1);
-                    query.exec(
-                                    "INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
+                    querystr="INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
                                             + weight + ",'" + qual + "','" + middle + "'," + aa
                                             + ",'" + pr_date + "','" + f_code + "',0,'"
                                             + code_t + "','" + middle_2 + "','" + middle_3
-                                            + "','" + vardia + "')");
-                            query.exec("select top 1 id from production where code_t='"+ code_t + "'");
-                            query.next();
-                            pid2 = query.value(0).toString();
+                                            + "','" + vardia + "')";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    querystr="select top 1 id from production where code_t='"+ code_t + "'";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    query.next();
+                    pid2 = query.value(0).toString();
 
                 }
 
@@ -1030,15 +1191,20 @@ void Dialog::startRead()
                     QString weight = code_t.left(3);
                     QString qual = code_t.mid(12, 1);
                     QString aa = code_t.mid(11, 1);
-                    query.exec(
-                                    "INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
+                    querystr="INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
                                             + weight + ",'" + qual + "','" + middle + "'," + aa
                                             + ",'" + pr_date + "','" + f_code + "',0,'"
                                             + code_t + "','" + middle_2 + "','" + middle_3
-                                            + "','" + vardia + "')");
-                            query.exec("select top 1 id from production where code_t='"+ code_t + "'");
-                            query.next();
-                            pid3 = query.value(0).toString();
+                                            + "','" + vardia + "')";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    querystr="select top 1 id from production where code_t='"+ code_t + "'";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    query.next();
+                    pid3 = query.value(0).toString();
 
                 }
 
@@ -1048,15 +1214,20 @@ void Dialog::startRead()
                     QString weight = code_t.left(3);
                     QString qual = code_t.mid(12, 1);
                     QString aa = code_t.mid(11, 1);
-                    query.exec(
-                                    "INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
+                    querystr="INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
                                             + weight + ",'" + qual + "','" + middle + "'," + aa
                                             + ",'" + pr_date + "','" + f_code + "',0,'"
                                             + code_t + "','" + middle_2 + "','" + middle_3
-                                            + "','" + vardia + "')");
-                            query.exec("select top 1 id from production where code_t='"+ code_t + "'");
-                            query.next();
-                            pid4 = query.value(0).toString();
+                                            + "','" + vardia + "')";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    querystr="select top 1 id from production where code_t='"+ code_t + "'";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    query.next();
+                    pid4 = query.value(0).toString();
 
                 }
 
@@ -1066,15 +1237,20 @@ void Dialog::startRead()
                     QString weight = code_t.left(3);
                     QString qual = code_t.mid(12, 1);
                     QString aa = code_t.mid(11, 1);
-                    query.exec(
-                                    "INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
+                    querystr="INSERT INTO PRODUCTION(weight,quality,middle,aa,pr_date,f_code,isKef,code_t,middle_2,middle_3,vardia) VALUES ("
                                             + weight + ",'" + qual + "','" + middle + "'," + aa
                                             + ",'" + pr_date + "','" + f_code + "',0,'"
                                             + code_t + "','" + middle_2 + "','" + middle_3
-                                            + "','" + vardia + "')");
-                            query.exec("select top 1 id from production where code_t='"+ code_t + "'");
-                            query.next();
-                            pid5 = query.value(0).toString();
+                                            + "','" + vardia + "')";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    querystr="select top 1 id from production where code_t='"+ code_t + "'";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("PRREWRAP",querystr);
+                    query.next();
+                    pid5 = query.value(0).toString();
 
                 }
 
@@ -1110,12 +1286,18 @@ void Dialog::startRead()
                 *in >> code_t >> code;
                 int exist=0;
                 QSqlQuery query1(db1);
-                query1.exec("SELECT * from profortosi_details where code_t='"+code_t+"'");
+                querystr="SELECT * from profortosi_details where code_t='"+code_t+"'";
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("KFDELETE",querystr);
 
                 if (!query1.next())
                     exist=0;
+                querystr="SELECT * from fortosi_details where code_t='"+code_t+"'";
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("KFDELETE",querystr);
 
-                query1.exec("SELECT * from fortosi_details where code_t='"+code_t+"'");
 
                 if (!query1.next())
                     exist=0;
@@ -1124,16 +1306,30 @@ void Dialog::startRead()
                 if (exist==0)
                 {
                 QSqlQuery query(db2);
-                query.exec("select stfileid from strn where stcomment='"+code_t+"'");
+                querystr="select stfileid from strn where stcomment='"+code_t+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("KFDELETE",querystr);
 
                 if (query.next())
                 {
                     QString id=query.value(0).toString();
-                    query.exec("delete from strn where stfileid="+id);
-                    query.exec("delete from serial where snserialc='"+code_t+"'");
+                    querystr="delete from strn where stfileid="+id;
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("KFDELETE",querystr);
+                    querystr="delete from serial where snserialc='"+code_t+"'";
+                    query.exec(querystr);
+                    if(debug)
+                        appendlog("KFDELETE",querystr);
+
                 }
                 QSqlQuery query1(db1);
-                query1.exec("DELETE from production where code_t='"+code_t+"'");
+                querystr="DELETE from production where code_t='"+code_t+"'";
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("KFDELETE",querystr);
+
             }
          }
 
@@ -1147,26 +1343,43 @@ void Dialog::startRead()
                 *in >> oldcode >> newcode;
                 QDateTime chdate=QDateTime::currentDateTime();
                 QSqlQuery query1(db1);
-                query1.exec("INSERT INTO change_labels (oldcode,newcode,chdate) VALUES ('"+oldcode+"','"+newcode+"','"+chdate.toString("MM-dd-yyyy")+"')");
-                query1.exec("select f_code,vardia from production where code_t='"+oldcode+"'");
+                querystr="INSERT INTO change_labels (oldcode,newcode,chdate) VALUES ('"+oldcode+"','"+newcode+"','"+chdate.toString("MM-dd-yyyy")+"')";
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("CHLAB",querystr);
+                querystr="select f_code,vardia from production where code_t='"+oldcode+"'";
+                query1.exec(querystr);
+                if(debug)
+                    appendlog("CHLAB",querystr);
                 query1.next();
                 QString vardia=query1.value(1).toString();
                 QString code_a=query1.value(0).toString();
                 QSqlQuery query(db2);
-                query.exec("select max(stfileid) from strn");
+                querystr="select max(stfileid) from strn";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("CHLAB",querystr);
                 QString stmaxid;
                 query.next();
 
 
                 QVariant id=query.value(0).toInt()+1;
                 stmaxid=id.toString();
-
-                query.exec("select sfileid from smast where scode='"+code_a+"'");
+                querystr="select sfileid from smast where scode='"+code_a+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("CHLAB",querystr);
                 query.next();
                 QString sFileid=query.value(0).toString();
                 QString weight=oldcode.left(3);
-                query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT,stcomment2,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",89,'ALLAGI',1,"+weight+",'"+oldcode+"','"+vardia+"',cast (current_time as timestamp))");
-                query.exec("delete from serial where snserialc='"+oldcode+"'");
+                querystr="INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT,stcomment2,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",89,'ALLAGI',1,"+weight+",'"+oldcode+"','"+vardia+"',cast (current_time as timestamp))";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("CHLAB",querystr);
+                querystr="delete from serial where snserialc='"+oldcode+"'";
+                query.exec(querystr);
+                if(debug)
+                    appendlog("CHLAB",querystr);
 
 
             }
@@ -1181,14 +1394,24 @@ void Dialog::startRead()
 
                 QSqlQuery query2(db2);
                 QSqlQuery query3(db3);
-                query2.exec("select sfileid from serial where snserialc='"+code+"'");
+                querystr="select sfileid from serial where snserialc='"+code+"'";
+                query2.exec(querystr);
+                if(debug)
+                    appendlog("READLAB",querystr);
                 query2.next();
                 QString sid=query2.value(0).toString();
-                query2.exec("select scode,sname from smast where sfileid="+sid);
+                querystr="select scode,sname from smast where sfileid="+sid;
+                query2.exec(querystr);
+                if(debug)
+                    appendlog("READLAB",querystr);
+
                 query2.next();
                 QString scode=query2.value(0).toString();
                 QString sname=query2.value(1).toString();
-                query3.exec("SELECT xrisi_perigrafi+' '+onomasia,GRAMMARIA,EPIMIK,FULLA,MD,CD FROM PRODIAGRAFES where kodikos_p='"+scode+"'");
+                querystr="SELECT xrisi_perigrafi+' '+onomasia,GRAMMARIA,EPIMIK,FULLA,MD,CD FROM PRODIAGRAFES where kodikos_p='"+scode+"'";
+                query3.exec(querystr);
+                if(debug)
+                    appendlog("READLAB",querystr);
                 query3.next();
                 QString xrisi=query3.value(0).toString();
                 QString grm=query3.value(1).toString();
@@ -1230,18 +1453,33 @@ void Dialog::startRead()
 
                                 if (m_sign==0)
                                         {
-                                        query.exec("INSERT INTO fortosi_header (ftrdate,customer,car1,car2,isclosed,iskef,weight,pfid,ccode) values ('"
-                                                        +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',0,0,"+weight+","+pfid+",'"+ccode+"')");
-                                        query.exec("SELECT max(id) from fortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
-                                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'");
+                                        querystr="INSERT INTO fortosi_header (ftrdate,customer,car1,car2,isclosed,iskef,weight,pfid,ccode) values ('"
+                                                        +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',0,0,"+weight+","+pfid+",'"+ccode+"')";
+                                        query.exec(querystr);
+                                        if(debug)
+                                            appendlog("FT",querystr);
+                                        querystr="SELECT max(id) from fortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
+                                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'";
+                                        query.exec(querystr);
+                                        if(debug)
+                                            appendlog("FT",querystr);
                                         query.last();
 
                                         ftrid=query.value(0).toString();
                                         m_sign=1;
                                         }
-                                query.exec("INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")");
+
+                                querystr="INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")";
+                                query.exec(querystr);
+                                if(debug)
+                                    appendlog("FT",querystr);
+
+
                                 QSqlQuery query1(db2);
-                                query1.exec("UPDATE SERIAL SET IS_FTIED=2 where SNSERIALC='"+code_t+"'");
+                                querystr="UPDATE SERIAL SET IS_FTIED=2 where SNSERIALC='"+code_t+"'";
+                                query1.exec(querystr);
+                                if(debug)
+                                    appendlog("FT",querystr);
 
 
         }
@@ -1257,18 +1495,30 @@ void Dialog::startRead()
 
                                 if (m_sign==0)
                                         {
-                                        query.exec("INSERT INTO profortosi_header (ftrdate,customer,car1,car2,isclosed,weight,ccode) values ('"
-                                                        +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',0,"+weight+",'"+ccode+"')");
-                                        query.exec("SELECT max(id) from profortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
-                                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'");
+                                    querystr="INSERT INTO profortosi_header (ftrdate,customer,car1,car2,isclosed,weight,ccode) values ('"
+                                                        +ftrdate.toString("MM-dd-yyyy")+"','"+customer+"','"+car1+"','"+car2+"',0,"+weight+",'"+ccode+"')";
+                                    query.exec(querystr);
+                                    if(debug)
+                                        appendlog("PFT",querystr);
+                                    querystr="SELECT max(id) from profortosi_header where ftrdate='"+ftrdate.toString("MM-dd-yyyy")+
+                                                        "' and customer='"+customer+"' and car1='"+car1+"' and car2='"+car2+"'";
+                                    query.exec(querystr);
+                                    if(debug)
+                                        appendlog("PFT",querystr);
                                         query.last();
 
                                         ftrid=query.value(0).toString();
                                         m_sign=1;
                                         }
-                                query.exec("INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")");
+                                querystr="INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+ftrid+")";
+                                query.exec(querystr);
+                                if(debug)
+                                    appendlog("PFT",querystr);
                                 QSqlQuery query1(db2);
-                                query1.exec("UPDATE SERIAL SET IS_PTIED=2 where SNSERIALC='"+code_t+"'");
+                                querystr="UPDATE SERIAL SET IS_PTIED=2 where SNSERIALC='"+code_t+"'";
+                                query1.exec(querystr);
+                                if(debug)
+                                    appendlog("PFT",querystr);
 
 
         }
@@ -1283,12 +1533,25 @@ void Dialog::startRead()
 
                                 if (m_sign==0)
                                         {
-                                        query.exec("UPDATE fortosi_header SET weight="+weight+" WHERE id="+fid);
-                                        query.exec("UPDATE fortosi_header SET isclosed=1 WHERE id="+fid);
-                                        query.exec("DELETE FROM fortosi_details WHERE ftrid="+fid);
+                                        querystr="UPDATE fortosi_header SET weight="+weight+" WHERE id="+fid;
+                                        query.exec(querystr);
+                                        if(debug)
+                                            appendlog("SF",querystr);
+                                        querystr="UPDATE fortosi_header SET isclosed=1 WHERE id="+fid;
+                                        query.exec(querystr);
+                                        if(debug)
+                                            appendlog("SF",querystr);
+                                        querystr="DELETE FROM fortosi_details WHERE ftrid="+fid;
+                                        query.exec(querystr);
+                                        if(debug)
+                                            appendlog("SF",querystr);
+
                                         m_sign=1;
                                         }
-                                query.exec("INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")");
+                                querystr="INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")";
+                                query.exec(querystr);
+                                if(debug)
+                                    appendlog("SF",querystr);
 
                         }
 
@@ -1304,12 +1567,25 @@ void Dialog::startRead()
 
                                 if (m_sign==0)
                                         {
-                                        query.exec("UPDATE profortosi_header SET weight="+weight+" WHERE id="+fid);
-                                        query.exec("UPDATE profortosi_header SET isclosed=1 WHERE id="+fid);
-                                        query.exec("DELETE FROM profortosi_details WHERE ftrid="+fid);
+                                    querystr="UPDATE profortosi_header SET weight="+weight+" WHERE id="+fid;
+                                    query.exec(querystr);
+                                    if(debug)
+                                        appendlog("PSF",querystr);
+                                    querystr="UPDATE profortosi_header SET isclosed=1 WHERE id="+fid;
+                                    query.exec(querystr);
+                                    if(debug)
+                                        appendlog("PSF",querystr);
+                                    querystr="DELETE FROM profortosi_details WHERE ftrid="+fid;
+                                    query.exec(querystr);
+                                    if(debug)
+                                        appendlog("PSF",querystr);
+
                                         m_sign=1;
                                         }
-                                query.exec("INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")");
+                                querystr="INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")";
+                                query.exec(querystr);
+                                if(debug)
+                                    appendlog("PSF",querystr);
 
                         }
 
@@ -1325,13 +1601,22 @@ void Dialog::startRead()
 
                                         if (m_sign==0)
                                                 {
-                                                qDebug()<<"M2:"<<m_sign;
-                                                query.exec("UPDATE fortosi_header SET weight="+weight+" WHERE id="+fid);
-                                                query.exec("DELETE FROM fortosi_details WHERE ftrid="+fid);
+                                                querystr="UPDATE fortosi_header SET weight="+weight+" WHERE id="+fid;
+                                                query.exec(querystr);
+                                                if(debug)
+                                                    appendlog("ST",querystr);
+                                                querystr="DELETE FROM fortosi_details WHERE ftrid="+fid;
+                                                query.exec(querystr);
+                                                if(debug)
+                                                    appendlog("ST",querystr);
+
                                                 m_sign=1;
                                                 }
                                         qDebug()<<"M3:"<<m_sign;
-                                        query.exec("INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")");
+                                        querystr="INSERT INTO fortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")";
+                                        query.exec(querystr);
+                                        if(debug)
+                                            appendlog("ST",querystr);
 
                                 }
                         if (req_type=="PST")
@@ -1345,11 +1630,20 @@ void Dialog::startRead()
 
                                         if (m_sign==0)
                                                 {
-                                                query.exec("UPDATE profortosi_header SET weight="+weight+" WHERE id="+fid);
-                                                query.exec("DELETE FROM profortosi_details WHERE ftrid="+fid);
+                                                querystr="UPDATE profortosi_header SET weight="+weight+" WHERE id="+fid;
+                                                query.exec(querystr);
+                                                if(debug)
+                                                    appendlog("PST",querystr);
+                                                querystr="DELETE FROM profortosi_details WHERE ftrid="+fid;
+                                                query.exec(querystr);
+                                                if(debug)
+                                                    appendlog("PST",querystr);
                                                 m_sign=1;
                                                 }
-                                        query.exec("INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")");
+                                        querystr="INSERT INTO profortosi_details (code_t,ftrid) values ('"+code_t+"',"+fid+")";
+                                        query.exec(querystr);
+                                        if(debug)
+                                            appendlog("PST",querystr);
 
                                 }
 
@@ -1375,7 +1669,10 @@ int Dialog::apografi_check(QString code_t)
 {
 
     QSqlQuery query(db1);
-    query.exec("select * from apografi where code_t='"+code_t+"'");
+    QString querystr="select * from apografi where code_t='"+code_t+"'";
+    query.exec(querystr);
+    if(debug)
+        appendlog("apografi_check()",querystr);
     //QString reply;
     int i=0;
     if (!query.next())
@@ -1385,21 +1682,6 @@ int Dialog::apografi_check(QString code_t)
         //reply="1";
         i=1;
     return i;
-    //qDebug()<<"reply:"<< reply;
-    //QByteArray block;
-
-    //QDataStream out(&block,QIODevice::WriteOnly);
-    //out.setVersion(QDataStream::Qt_4_1);
-    //out<<quint16(0)<<(QString)reply<<(QString)code_t;
-    //out.device()->seek(0);
-    //out<<quint16(block.size()-sizeof(quint16));
-    //client->write(block);
-    //QByteArray block1;
-
-    //QDataStream out1(&block1,QIODevice::WriteOnly);
-    //out1.setVersion(QDataStream::Qt_4_1);
-    //out1<<quint16(0xFFFF);
-    //client->write(block1);
 
 
 }
@@ -1429,8 +1711,11 @@ void Dialog::customer_names(QString like,QString lang, QTcpSocket *client)
                         like.replace(QString("U"),QString("È"));
                         like.replace(QString("V"),QString("Ù"));
                 }
+        QString querystr="SELECT ccode,cname from cmast where cname like KC('"+like+"%') order by cname";
+        query.exec(querystr);
+        if(debug)
+            appendlog("customer_names()",querystr);
 
-        query.exec("SELECT ccode,cname from cmast where cname like KC('"+like+"%') order by cname");
 
         //query.first();
 
@@ -1468,7 +1753,10 @@ void Dialog::item_codes(QString like,QTcpSocket *client)
 {
         //QSqlQuery query(db1);
         QSqlQuery query(db2);
-        query.exec("SELECT scode from smast where scode like KC('"+like+"%') order by scode");
+        QString querystr="SELECT scode from smast where scode like KC('"+like+"%') order by scode";
+        query.exec(querystr);
+        if(debug)
+            appendlog("item_codes()",querystr);
         //query.first();
 
 
@@ -1502,8 +1790,10 @@ void Dialog::item_codes(QString like,QTcpSocket *client)
 void Dialog::fortoseis_progress(QTcpSocket *client)
 {
         QSqlQuery query(db1);
-
-        query.exec("SELECT ccode,customer,car1,car2,weight,id from fortosi_header where isclosed=0 order by customer");
+        QString querystr="SELECT ccode,customer,car1,car2,weight,id from fortosi_header where isclosed=0 order by customer";
+        query.exec(querystr);
+        if(debug)
+            appendlog("fortoseis_progress()",querystr);
 
 
 
@@ -1540,8 +1830,10 @@ void Dialog::fortoseis_progress(QTcpSocket *client)
 void Dialog::profortoseis_progress(QTcpSocket *client)
 {
         QSqlQuery query(db1);
-
-        query.exec("SELECT customer,car1,car2,weight,id from profortosi_header where isclosed=0 order by customer");
+        QString querystr="SELECT customer,car1,car2,weight,id from profortosi_header where isclosed=0 order by customer";
+        query.exec(querystr);
+        if(debug)
+            appendlog("profortoseis_progress()",querystr);
 
 
 
@@ -1580,8 +1872,10 @@ void Dialog::profortoseis_progress(QTcpSocket *client)
 void Dialog::fortosi_review(QString fsid,QTcpSocket *client)
 {
         QSqlQuery query(db1);
-
-        query.exec("SELECT h.customer,h.car1,h.car2,h.weight,d.code_t from fortosi_header h,fortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id");
+        QString querystr="SELECT h.customer,h.car1,h.car2,h.weight,d.code_t from fortosi_header h,fortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id";
+        query.exec(querystr);
+        if(debug)
+            appendlog("fortosi_review()",querystr);
 
 
 
@@ -1617,8 +1911,10 @@ void Dialog::fortosi_review(QString fsid,QTcpSocket *client)
 void Dialog::profortosi_review(QString fsid,QTcpSocket *client)
 {
         QSqlQuery query(db1);
-
-        query.exec("SELECT h.customer,h.car1,h.car2,h.weight,d.code_t from profortosi_header h,profortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id");
+        QString querystr="SELECT h.customer,h.car1,h.car2,h.weight,d.code_t from profortosi_header h,profortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id";
+        query.exec(querystr);
+        if(debug)
+            appendlog("profortosi_review()",querystr);
 
 
 
@@ -1655,8 +1951,10 @@ void Dialog::profortosi_review(QString fsid,QTcpSocket *client)
 void Dialog::fortosi_continue(QString fsid,QTcpSocket *client)
 {
         QSqlQuery query(db1);
-
-        query.exec("SELECT h.customer,d.code_t,h.weight,h.pfid from fortosi_header h,fortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id");
+        QString querystr="SELECT h.customer,d.code_t,h.weight,h.pfid from fortosi_header h,fortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id";
+        query.exec(querystr);
+        if(debug)
+            appendlog("fortosi_continue",querystr);
 
 
 
@@ -1695,8 +1993,10 @@ void Dialog::fortosi_continue(QString fsid,QTcpSocket *client)
 void Dialog::profortosi_continue(QString fsid,QTcpSocket *client)
 {
         QSqlQuery query(db1);
-
-        query.exec("SELECT h.customer,d.code_t,h.weight from profortosi_header h,profortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id");
+        QString querystr="SELECT h.customer,d.code_t,h.weight from profortosi_header h,profortosi_details d where d.ftrid=h.id and h.id="+fsid+" order by d.id";
+        query.exec(querystr);
+        if(debug)
+            appendlog("profortosi_continue",querystr);
 
 
 
@@ -1731,8 +2031,10 @@ void Dialog::profortosi_continue(QString fsid,QTcpSocket *client)
 void Dialog::profortoseis_closed(QTcpSocket *client)
 {
         QSqlQuery query(db1);
-
-        query.exec("SELECT ftrdate,id,customer,car1,car2,weight,ccode FROM profortosi_header where isclosed=1 and istransformed=0 order by ftrdate");
+        QString querystr="SELECT ftrdate,id,customer,car1,car2,weight,ccode FROM profortosi_header where isclosed=1 and istransformed=0 order by ftrdate";
+        query.exec(querystr);
+        if(debug)
+            appendlog("profortoseis_closed()",querystr);
 
 
 
@@ -1857,9 +2159,15 @@ void Dialog::fortosi_temporary(QDataStream *in,QTcpSocket *client)
 void Dialog::compare(QTcpSocket *client)
 {
     QSqlQuery query(db1);
-    query.exec("SELECT t.code_t from tmp_compare t where not exists (select * from profortosi_details pf where pf.ftrid=t.prfid and pf.code_t=t.code_t) ");
+    QString querystr="SELECT t.code_t from tmp_compare t where not exists (select * from profortosi_details pf where pf.ftrid=t.prfid and pf.code_t=t.code_t) ";
+    query.exec(querystr);
+    if(debug)
+        appendlog("compare()",querystr);
     QSqlQuery query1(db1);
-    query1.exec("select pf.code_t from profortosi_details pf where ftrid=(select distinct prfid from tmp_compare) and not exists (select * from tmp_compare t where t.code_t=pf.code_t)");
+    querystr="select pf.code_t from profortosi_details pf where ftrid=(select distinct prfid from tmp_compare) and not exists (select * from tmp_compare t where t.code_t=pf.code_t)";
+    query1.exec(querystr);
+    if(debug)
+        appendlog("compare()",querystr);
     while(query.next())
     {
         QByteArray block;
@@ -1895,7 +2203,10 @@ void Dialog::compare(QTcpSocket *client)
         out1<<quint16(0xFFFF);
         client->write(block1);
         qDebug()<<"12.ESTEILA COMP";
-        query.exec("DELETE from tmp_compare");
+        querystr="DELETE from tmp_compare";
+        query.exec(querystr);
+        if(debug)
+            appendlog("compare()",querystr);
 
     }
 

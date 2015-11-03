@@ -76,6 +76,7 @@ private:
     Ui::Dialog *ui;
     QSystemTrayIcon *trayicon;
     void appendlog(QString function,QString querystr);
+    bool debug;
 public slots:
     void acceptConnection();
     void startRead();
