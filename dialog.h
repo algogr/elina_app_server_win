@@ -27,7 +27,7 @@
 #include <QTcpSocket>
 #include <QSystemTrayIcon>
 #include <QIcon>
-#include "constants.h"
+
 
 namespace Ui {
     class Dialog;
@@ -75,6 +75,7 @@ protected:
 private:
     Ui::Dialog *ui;
     QSystemTrayIcon *trayicon;
+    void appendlog(QString function,QString querystr);
 public slots:
     void acceptConnection();
     void startRead();
@@ -82,7 +83,7 @@ public slots:
     void error();
     void quitapp();
     void about();
-
+    void log();
 };
 
 #endif // DIALOG_H

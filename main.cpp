@@ -18,11 +18,32 @@
 
 #include <QtGui/QApplication>
 #include "dialog.h"
+#include <QSettings>
 
 int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
     Dialog w;
+    QFile st(QDir::currentPath()+ "/settings.ini");
+    if(!st.open(QIODevice::ReadOnly | QIODevice::Text))
+
+    {
+
+        QString settingsFile = (QDir::currentPath()+ "/settings.ini");
+        QSettings *settings =new QSettings(settingsFile,QSettings::IniFormat);
+
+        settings->setValue("host", "194.111.212.84");
+        settings->setValue("dbuser", "sa");
+        settings->setValue("dbpassword", "sa");
+        settings->setValue("hfsserver", "c://jim//hfs//upload//");
+        settings->setValue("apath","C://Program Files//algo//");
+        settings->setValue("version","1.1");
+        settings->sync();
+        delete (settings);
+    }
+    st.close();
+
+
     //w.show();
     return a.exec();
 }

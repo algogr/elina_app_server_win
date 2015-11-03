@@ -27,33 +27,28 @@ Dialog::Dialog(QWidget *parent) :
 {
     ui->setupUi(this);
     this->setWindowFlags(Qt::Window | Qt::CustomizeWindowHint);
-    //db = QSqlDatabase::addDatabase("QTDS");
-    //db.setDatabaseName(DB_EXT);
-    //db.setUserName(USER);
-    //db.setPassword(PASS);
-    //db.setHostName(HOST);
-    //db1 = QSqlDatabase::addDatabase("QTDS","kef");
-    //db1 = QSqlDatabase::addDatabase("QODBC","elina");
-    //db1.setDatabaseName(DB_KEF);
-    //db1.setUserName(USER);
-    //db1.setPassword(PASS);
-    //db1.setHostName(HOST);
-    //db = QSqlDatabase::database();
-    //db1 = QSqlDatabase::database("kef");
-
+    QString settingsFile = (QDir::currentPath()+ "/settings.ini");
+    QSettings *settings =new QSettings(settingsFile,QSettings::IniFormat);
+    QString host=settings->value("host").toString();
+    QString dbuser=settings->value("dbuser").toString();
+    QString dbpassword=settings->value("dbpassword").toString();
+    QString apath=settings->value("apath").toString();
+    QString version=settings->value("version").toString();
+    ui->label->setText(ui->label->text()+version);
+    ui->tableWidget->setColumnCount(4);
     db1 = QSqlDatabase::addDatabase("QODBC","elina_sqlserver");
     db2 = QSqlDatabase::addDatabase("QODBC","elina");
     db3 = QSqlDatabase::addDatabase("QODBC","elina_prodiagrafes");
     db1.setDatabaseName("elina_sqlserver");
     db1.setHostName("localhost");
-    db1.setUserName(USER);
-    db1.setPassword(PASS);
+    db1.setUserName(dbuser);
+    db1.setPassword(dbpassword);
     db2.setDatabaseName("elina");
     db2.setHostName("localhost");
     db3.setDatabaseName("elina_prodiagrafes");
     db3.setHostName("localhost");
-    db3.setUserName(USER);
-    db3.setPassword(PASS);
+    db3.setUserName(dbuser);
+    db3.setPassword(dbpassword);
     db1 = QSqlDatabase::database("elina_sqlserver");
     db2 = QSqlDatabase::database("elina");
     db3 = QSqlDatabase::database("elina_prodiagrafes");
@@ -76,7 +71,7 @@ Dialog::Dialog(QWidget *parent) :
     connect(&server, SIGNAL(newConnection()),
             this, SLOT(acceptConnection()));
 
-    QHostAddress addr(HOST);
+    QHostAddress addr(host);
 
     //SCANNER
     server.listen(addr, 8889);
@@ -88,12 +83,13 @@ Dialog::Dialog(QWidget *parent) :
     //in=0;
     m_sign=0;
     QSystemTrayIcon *trayicon=new QSystemTrayIcon();
-    QString ipath=(QString)APATH+"server-6.png";
+    QString ipath=apath+"server-5.png";
     QIcon *icon=new QIcon(ipath);
     QMenu *traymenu=new QMenu();
     trayicon->setToolTip("Algo Application Server");
 
     trayicon->setContextMenu(traymenu);
+    QAction *actionlog=traymenu->addAction(tr("Log"));
     QAction *actionabout=traymenu->addAction(tr("About"));
     traymenu->addSeparator();
     QAction *actionexit=traymenu->addAction(tr("Exit"));
@@ -102,7 +98,9 @@ Dialog::Dialog(QWidget *parent) :
     trayicon->show();
     connect(actionexit,SIGNAL(triggered()),this,SLOT(quitapp()));
     connect(actionabout,SIGNAL(triggered()),this,SLOT(about()));
+    connect(actionlog,SIGNAL(triggered()),this,SLOT(log()));
     connect(ui->pushButton,SIGNAL(released()),this,SLOT(hide()));
+    delete settings;
 }
 
 Dialog::~Dialog()
@@ -156,6 +154,7 @@ void Dialog::startRead()
         QTcpSocket *client=qobject_cast<QTcpSocket *>(sender());
         QDataStream *in=new QDataStream (client);
         in->setVersion(QDataStream::Qt_4_1);
+
 
         qDebug()<<"2.BYETS1:"<<client->bytesAvailable();
         //QDataStream in(client);
@@ -276,6 +275,7 @@ void Dialog::startRead()
             *in >> customer;
             QSqlQuery query(db1);
             QDateTime ftrdate=QDateTime::currentDateTime();
+
             query.exec("SELECT CCODE,CUSTOMER,CAR1,CAR2,WEIGHT,ID FROM PROFORTOSI_HEADER WHERE ISCLOSED=1 AND CCODE='"+customer+"'");
             while (query.next())
             {
@@ -557,7 +557,10 @@ void Dialog::startRead()
 
         if (req_type=="APIN_NEW")
         {
-            QFile file((QString)HFS_SERVER+"apografi.txt");
+            QString settingsFile = (QDir::currentPath()+ "/settings.ini");
+            QSettings *settings =new QSettings(settingsFile,QSettings::IniFormat);
+            QString hfsserver=settings->value("hfsserver").toString();
+            QFile file(hfsserver+"apografi.txt");
             if(!file.open(QIODevice::ReadOnly))
             {
                 qDebug()<<"File apografi not found";
@@ -584,9 +587,10 @@ void Dialog::startRead()
 
                 line=in.readLine();
             }
-            QString test=(QString)HFS_SERVER+"apografi_"+adate.toString("MMddyyyyHHmmss")+".txt";
+            QString test=hfsserver+"apografi_"+adate.toString("MMddyyyyHHmmss")+".txt";
             qDebug()<<test;
-            file.copy((QString)HFS_SERVER+"apografi_"+adate.toString("MMddyyyyHHmmss")+".txt");
+            file.copy(hfsserver+"apografi_"+adate.toString("MMddyyyyHHmmss")+".txt");
+            delete settings;
 
         }
 
@@ -624,7 +628,7 @@ void Dialog::startRead()
 
 
                 QDateTime pr_date=QDateTime::currentDateTime();
-                QString dcomid=(QString) COMID;
+
 
                 res=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,stcomment,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",47,'KAT',1,"+weight+",'"+serial+"',cast (current_time as timestamp))");
                 query.exec("UPDATE SERIAL SET SNDATE2=CURRENT_DATE where snserialc='"+serial+"' and sfileid="+sFileid);
@@ -696,7 +700,7 @@ void Dialog::startRead()
 
 
                 QDateTime pr_date=QDateTime::currentDateTime();
-                QString dcomid=(QString) COMID;
+
 
                 //res=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,stcomment,sttime) VALUES ("+stmaxid+",CURRENT_DATE,"+sFileid+",47,'KAT',1,"+weight+",'"+serial+"',cast (current_time as timestamp))");
                 query.exec("UPDATE SERIAL SET SNDATE1=CURRENT_DATE where snserialc='"+serial+"'");
@@ -834,7 +838,7 @@ void Dialog::startRead()
                 st2="INSERT INTO SERIAL(snfileid,Sfileid,snserialc,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"',CURRENT_DATE,'PARAGOGI',83,1)";
                 if ((quality!="K") and (code.left(1)!="E"))
                 {
-                    QString dcomid=(QString) COMID;
+
 
                     //st=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT) VALUES ("+stmaxid+",'"+pr_date.toString("yyyy-MM-dd")+"',"+sFileid+",66,'PARAGOGI',1,"+weight+",'"+serial+"')");
                     //sn=query.exec("INSERT INTO SERIAL(snfileidD,Sfileid,snscode,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"','"+pr_date.toString("yyyy-MM-dd")+"','PARAGOGI',66,1)");
@@ -845,7 +849,7 @@ void Dialog::startRead()
 
                 if ((quality!="K") and (code.left(1)=="E"))
                 {
-                    QString dcomid=(QString) COMID;
+
 
                     //st=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT) VALUES ("+stmaxid+",'"+pr_date.toString("yyyy-MM-dd")+"',"+sFileid+",66,'PARAGOGI',1,"+weight+",'"+serial+"')");
                     //sn=query.exec("INSERT INTO SERIAL(snfileidD,Sfileid,snscode,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"','"+pr_date.toString("yyyy-MM-dd")+"','PARAGOGI',66,1)");
@@ -928,7 +932,7 @@ void Dialog::startRead()
 
                 if (quality!="K")
                 {
-                    QString dcomid=(QString) COMID;
+
 
                     //st=query.exec("INSERT INTO STRN(stFileid,STDATE,sfileid,STTRANSKIND,STDOC,STLOCATION,STQUANT,STCOMMENT) VALUES ("+stmaxid+",'"+pr_date.toString("yyyy-MM-dd")+"',"+sFileid+",66,'PARAGOGI',1,"+weight+",'"+serial+"')");
                     //sn=query.exec("INSERT INTO SERIAL(snfileidD,Sfileid,snscode,SNDATE1,SNINVOICE1,SNTRKIND1,SNSPACE1) VALUES ("+snmaxid+","+sFileid+",'"+serial+"','"+pr_date.toString("yyyy-MM-dd")+"','PARAGOGI',66,1)");
@@ -1971,4 +1975,38 @@ void Dialog::about()
     mb.setWindowTitle("Elina Application server");
     mb.exec();
     */
+}
+
+void Dialog::log()
+{
+    ui->pushOff->setVisible(TRUE);
+    ui->pushOn->setVisible(TRUE);
+    ui->tableWidget->setVisible(TRUE);
+    ui->label->setVisible(FALSE);
+    this->show();
+
+}
+
+void Dialog::appendlog(QString function,QString querystr)
+{
+    QDateTime *timestamp=new QDateTime(QDateTime::currentDateTime());
+    QTableWidgetItem *d=new QTableWidgetItem;
+    d->setText(timestamp->date().toString());
+
+    QTableWidgetItem *t=new QTableWidgetItem;
+    t->setText(timestamp->time().toString());
+
+    QTableWidgetItem *f=new QTableWidgetItem;
+    f->setText(function);
+
+    QTableWidgetItem *q=new QTableWidgetItem;
+    q->setText(querystr);
+
+    int r=ui->tableWidget->rowCount();
+    ui->tableWidget->setRowCount(r+1);
+    ui->tableWidget->setItem(r,0,d);
+    ui->tableWidget->setItem(r,1,t);
+    ui->tableWidget->setItem(r,2,f);
+    ui->tableWidget->setItem(r,3,q);
+
 }
