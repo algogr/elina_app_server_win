@@ -27,6 +27,7 @@
 #include <QTcpSocket>
 #include <QSystemTrayIcon>
 #include <QIcon>
+#include <QKeyEvent>
 
 
 namespace Ui {
@@ -77,6 +78,7 @@ private:
     QSystemTrayIcon *trayicon;
     void appendlog(QString function,QString querystr);
     bool debug;
+    void keyPressEvent(QKeyEvent *e);
 public slots:
     void acceptConnection();
     void startRead();
@@ -85,6 +87,9 @@ public slots:
     void quitapp();
     void about();
     void log();
+    void debugon();
+    void debugoff();
+    void clearlog();
 };
 
 #endif // DIALOG_H

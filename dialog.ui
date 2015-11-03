@@ -16,7 +16,7 @@
   <widget class="QPushButton" name="pushButton">
    <property name="geometry">
     <rect>
-     <x>530</x>
+     <x>610</x>
      <y>230</y>
      <width>75</width>
      <height>41</height>
@@ -36,7 +36,7 @@
   <widget class="QPushButton" name="pushOn">
    <property name="geometry">
     <rect>
-     <x>104</x>
+     <x>20</x>
      <y>230</y>
      <width>131</width>
      <height>41</height>
@@ -56,7 +56,7 @@
   <widget class="QPushButton" name="pushOff">
    <property name="geometry">
     <rect>
-     <x>274</x>
+     <x>230</x>
      <y>230</y>
      <width>121</width>
      <height>41</height>
@@ -101,6 +101,26 @@
      <width>691</width>
      <height>191</height>
     </rect>
+   </property>
+  </widget>
+  <widget class="QPushButton" name="pushClear">
+   <property name="geometry">
+    <rect>
+     <x>420</x>
+     <y>230</y>
+     <width>121</width>
+     <height>41</height>
+    </rect>
+   </property>
+   <property name="font">
+    <font>
+     <pointsize>10</pointsize>
+     <weight>75</weight>
+     <bold>true</bold>
+    </font>
+   </property>
+   <property name="text">
+    <string>Clear Log</string>
    </property>
   </widget>
  </widget>
