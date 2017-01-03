@@ -19,13 +19,13 @@
 #ifndef DIALOG_H
 #define DIALOG_H
 
-#include <QDialog>
+#include <QtWidgets/QDialog>
 #include <QtNetwork>
 #include <QtSql>
 #include <QObject>
 #include <QTcpServer>
 #include <QTcpSocket>
-#include <QSystemTrayIcon>
+#include <QtWidgets/QSystemTrayIcon>
 #include <QIcon>
 #include <QKeyEvent>
 
@@ -59,8 +59,6 @@ protected:
     void customer_names(QString like,QString lang,QTcpSocket *client);
     void item_codes(QString like,QTcpSocket *client);
     void fortoseis_progress(QTcpSocket *client);
-    void profortoseis_progress(QTcpSocket *client);
-    void profortoseis_closed(QTcpSocket *client);
     void fortosi_final(QTcpSocket *client,QDataStream *in);
     void fortosi_review(QString fsid,QTcpSocket *client);
     void profortosi_review(QString fsid,QTcpSocket *client);
@@ -68,7 +66,6 @@ protected:
     void profortosi_continue(QString fsid,QTcpSocket *client);
     void fortosi_temporary(QDataStream *in,QTcpSocket *client);
     int  apografi_check(QString code_t);
-    void compare(QTcpSocket *client);
     void check_finish(QTcpSocket *client);
     void ins_finish(QTcpSocket *client);
     void update_pr_log();
@@ -79,6 +76,7 @@ private:
     void appendlog(QString function,QString querystr);
     bool debug;
     void keyPressEvent(QKeyEvent *e);
+    void sendIFI(QTcpSocket* client);
 public slots:
     void acceptConnection();
     void startRead();
